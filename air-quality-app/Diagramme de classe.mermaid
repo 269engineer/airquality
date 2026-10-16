@@ -1,0 +1,244 @@
+%% ═══════════════════════════════════════════════════════════════
+%%  Diagramme de classe — Application AirWatch (QAI)
+%%  ESP32 + MQ-2/MQ-7/MQ-135 + DHT22 → MQTT → Node/Express
+%%  → MySQL + Socket.IO → React
+%%  Projet PFE 2026 — Qualité de l'Air Intérieur
+%% ═══════════════════════════════════════════════════════════════
+classDiagram
+
+%% ───────────── ENTITÉS / MODÈLE DE DONNÉES ─────────────
+class Reading {
+  +BIGINT id
+  +int space_id
+  +float temperature
+  +float humidity
+  +float co_raw
+  +float co_corrected
+  +float gaz_raw
+  +float gaz_corrected
+  +float cov_raw
+  +float cov_corrected
+  +int qai_score
+  +timestamp created_at
+}
+
+class Alert {
+  +int id
+  +int space_id
+  +enum severity
+  +string sensor
+  +string pollutant
+  +float value
+  +float threshold
+  +string unit
+  +string title
+  +string message
+  +bool acknowledged
+  +bool telegram_sent
+  +timestamp created_at
+  +timestamp updated_at
+}
+
+class Space {
+  +int id
+  +string name
+  +string type
+  +string icon
+  +string description
+  +timestamp created_at
+}
+
+%% ───────────── COUCHE ACQUISITION / TEMPS RÉEL ─────────────
+class MQTTClient {
+  -Client client
+  +createMQTTClient() Client
+  +getMQTTClient() Client
+}
+
+class MQTTService {
+  -io _io
+  +setSocketIO(io)
+  +startMQTTListener(client)
+  -handleMessage(rawPayload)
+}
+
+class Server {
+  -Express app
+  -HttpServer server
+  -SocketIO io
+  +listen(port)
+  +use(route, router)
+}
+
+%% ───────────── SERVICES MÉTIER (BACKEND) ─────────────
+class CorrectionService {
+  +COEFFICIENTS
+  +correctPPM(rawPPM, temp, humidity, sensor) float
+}
+
+class AlertService {
+  +THRESHOLDS
+  -lastAlertTime
+  +checkThresholds(reading, io)
+  +createAlert(payload) Alert
+}
+
+class TelegramService {
+  -Bot bot
+  -initBot()
+  +sendAlert(alert)
+}
+
+class Database {
+  -Pool pool
+  +execute(sql, params)
+  +query(sql, params)
+  +testConnection()
+}
+
+%% ───────────── CONTRÔLEURS / ROUTES API (EXPRESS) ─────────────
+class ReadingsRouter {
+  +GET /latest
+  +GET /history?hours
+  +GET /all
+  +GET /?limit&offset
+  -enrich(row) Reading
+}
+
+class AlertsRouter {
+  +GET /
+  +GET /stats
+  +PATCH /:id/acknowledge
+  +PATCH /acknowledge-all
+  +DELETE /:id
+}
+
+class SpacesRouter {
+  +GET /
+  +GET /:id
+  -enrich(row)
+}
+
+%% ───────────── FRONTEND — SERVICES & HOOKS ─────────────
+class ApiService {
+  +getLatestReadings()
+  +getHistory(spaceId, hours)
+  +getAllReadings()
+  +getAlerts(params)
+  +getAlertStats()
+  +acknowledgeAlert(id)
+  +acknowledgeAll()
+  +deleteAlert(id)
+  +getSpaces()
+  +getSpace(id)
+  +getHealth()
+}
+
+class useSocket {
+  +useSocket(event, callback)
+  -getSocket() Socket
+}
+
+class useNotifications {
+  -toasts
+  +push(alert)
+  +remove(id)
+}
+
+%% ───────────── FRONTEND — PAGES (REACT) ─────────────
+class App {
+  +AppInner()
+}
+class Dashboard {
+  -reading
+  -THRESHOLDS
+}
+class HistoryPage {
+  -rows
+  -hours
+  -showAll
+  +downloadCSV(rows, hours)
+}
+class AlertsPage {
+  -alertList
+  -stats
+  -filter
+}
+class MapPage {
+  -spaces
+  -selected
+  -filter
+  +deriveStatus(space)
+}
+
+%% ───────────── FRONTEND — COMPOSANTS UI ─────────────
+class Sidebar
+class StatCard {
+  +label
+  +value
+  +unit
+  +trend
+}
+class AQIBadge {
+  +aqi
+  +size
+}
+class NotificationToast {
+  +Toast(props)
+}
+
+%% ═══════════════ RELATIONS ═══════════════
+
+%% Entités ↔ Espace
+Space "1" o-- "*" Reading : héberge
+Space "1" o-- "*" Alert   : concerne
+
+%% Acquisition temps réel
+MQTTClient ..> MQTTService : messages MQTT
+MQTTService ..> Database : INSERT airquality
+MQTTService ..> CorrectionService : correction ppm
+MQTTService ..> AlertService : checkThresholds
+MQTTService ..> Reading : crée
+Server *-- MQTTService
+Server *-- ReadingsRouter
+Server *-- AlertsRouter
+Server *-- SpacesRouter
+
+%% Services métier
+AlertService ..> Database : INSERT/SELECT alerts
+AlertService ..> TelegramService : notifie
+AlertService ..> Alert : crée
+CorrectionService ..> Reading : enrichit
+
+%% Routes → base
+ReadingsRouter ..> Database
+ReadingsRouter ..> Reading
+AlertsRouter ..> Database
+AlertsRouter ..> Alert
+SpacesRouter ..> Database
+SpacesRouter ..> Space
+
+%% Frontend → API REST
+ApiService ..> ReadingsRouter : HTTP
+ApiService ..> AlertsRouter : HTTP
+ApiService ..> SpacesRouter : HTTP
+
+%% Frontend structure
+App *-- Sidebar
+App o-- Dashboard
+App o-- HistoryPage
+App o-- AlertsPage
+App o-- MapPage
+App ..> useSocket : new_alert
+App ..> useNotifications
+
+Dashboard ..> ApiService
+Dashboard ..> useSocket : new_reading
+Dashboard *-- StatCard
+Dashboard *-- AQIBadge
+HistoryPage ..> ApiService
+AlertsPage ..> ApiService
+AlertsPage ..> useSocket : new_alert
+MapPage ..> ApiService
+useNotifications ..> NotificationToast
+MQTTService ..> useSocket : emit new_reading/new_alert
