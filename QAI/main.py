@@ -18,16 +18,16 @@ SSID     = "Wokwi-GUEST"
 PASSWORD = ""
 
 # --- Parametres MQTT EMQX ---
-MQTT_SERVER = "n61222f2.ala.eu-central-1.emqxsl.com"
-MQTT_PORT   = 8883
-MQTT_USER   = "qai"
-MQTT_PASS   = "qai2026@"
-MQTT_CLIENT = "ESP32Client"
-TOPIC       = b"esp32/airquality"
+MQTT_SERVER = "..." #adresse du serveur MQTT
+MQTT_PORT   = 0000 #numéro de port
+MQTT_USER   = "..." #nom d'utilisateur
+MQTT_PASS   = "*****" #mot de passe
+MQTT_CLIENT = "...." #le nom du client MQTT
+TOPIC       = b"....." #le dossier du client MQTT dans le serveur
 
 # --- Identifiants Telegram ---
-TOKEN   = "8776420234:AAHMykB2h7U3AZK96FcAvezMlgIpCGIJwog"   # ton token BotFather
-CHAT_ID = 5699078708           # ton chat_id
+TOKEN   = "....."   # ton token BotFather
+CHAT_ID = 00000000          # ton chat_id
 
 # --- Capteurs MQ ---
 mq2   = ADC(Pin(34))
